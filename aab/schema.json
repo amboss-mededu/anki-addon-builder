@@ -28,6 +28,11 @@
     "copyright_start": {
       "type": "number"
     },
+    "package_dir": {
+      "type": "string",
+      "default": ".",
+      "description": "Directory holding the add-on sources (src/, designer/, resources/), relative to the project root. Defaults to the project root itself."
+    },
     "conflicts": {
       "type": "array",
       "items": {

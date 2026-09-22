@@ -34,6 +34,7 @@ Utility functions
 """
 
 import logging
+import shlex
 import subprocess
 import sys
 
@@ -70,8 +71,8 @@ def purge(path, patterns, recursive=False):
     pattern_string = " -o ".join("-name '{}'".format(p) for p in patterns)
     pattern_string = "\( {} \)".format(pattern_string)
     depth = "-maxdepth 1" if not recursive else ""
-    cmd = 'find "{path}" {depth} {pattern_string} -delete'.format(
-        path=path, depth=depth, pattern_string=pattern_string
+    cmd = "find {path} {depth} {pattern_string} -delete".format(
+        path=shlex.quote(str(path)), depth=depth, pattern_string=pattern_string
     )
     return call_shell(cmd)
 

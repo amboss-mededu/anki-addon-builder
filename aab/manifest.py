@@ -49,10 +49,14 @@ class ManifestUtils:
         version: str,
         dist_type: DistType,
         target_dir: Path,
+        git: Optional[Git] = None,
     ):
         logging.info("Writing manifest...")
         manifest = cls.generate_manifest_from_properties(
-            addon_properties=addon_properties, version=version, dist_type=dist_type
+            addon_properties=addon_properties,
+            version=version,
+            dist_type=dist_type,
+            git=git,
         )
         cls.write_manifest(manifest=manifest, target_dir=target_dir)
 
@@ -62,7 +66,12 @@ class ManifestUtils:
         addon_properties: Config,
         version: str,
         dist_type: DistType,
+        git: Optional[Git] = None,
     ) -> Dict[str, Any]:
+        """
+        `git` is the repository the version's commit time is read from. Defaults
+        to the working directory.
+        """
         manifest = {
             "name": addon_properties["display_name"],
             "package": addon_properties["module_name"],
@@ -71,7 +80,7 @@ class ManifestUtils:
             "version": version,
             "homepage": addon_properties.get("homepage", ""),
             "conflicts": deepcopy(addon_properties["conflicts"]),
-            "mod": Git().modtime(version),
+            "mod": (git or Git()).modtime(version),
         }
 
         # Add version specifiers:

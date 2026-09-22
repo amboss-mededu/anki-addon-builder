@@ -37,45 +37,63 @@ import logging
 import os
 import shutil
 import sys
+import warnings
 import zipfile
-from typing import List
+from typing import List, Optional
 
-from . import PATH_DIST, PATH_PROJECT_ROOT
-from .config import Config
 from .git import Git
 from .manifest import ManifestUtils
+from .project import Project
 from .ui import QtVersion, UIBuilder
-from .utils import call_shell, copy_recursively, purge
+from .utils import copy_recursively, purge
 
 _trash_patterns = ["*.pyc", "*.pyo", "__pycache__"]
 
 
+def clean_project(project: Project):
+    logging.info("Cleaning project...")
+    if project.dist_dir.exists():
+        shutil.rmtree(str(project.dist_dir))
+    if project.package_dir.exists():
+        purge(str(project.package_dir), _trash_patterns, recursive=True)
+
+
 def clean_repo():
-    logging.info("Cleaning repository...")
-    if PATH_DIST.exists():
-        shutil.rmtree(str(PATH_DIST))
-    purge(".", _trash_patterns, recursive=True)
+    """Deprecated: use clean_project() with an explicit Project"""
+    warnings.warn(
+        "aab.builder.clean_repo() is deprecated, use clean_project(project)",
+        DeprecationWarning,
+        stacklevel=2,
+    )
+    clean_project(Project.discover())
 
 
 class AddonBuilder:
-
-    _paths_licenses = [PATH_DIST, PATH_DIST / "resources"]
-    _path_optional_icons = PATH_PROJECT_ROOT / "resources" / "icons" / "optional"
-    _path_changelog = PATH_DIST / "CHANGELOG.md"
-
-    def __init__(self, version=None, callback_archive=None):
-        self._version = Git().parse_version(version)
+    def __init__(
+        self,
+        version=None,
+        callback_archive=None,
+        project: Optional[Project] = None,
+    ):
+        self._project = project if project is not None else Project.discover()
+        self._git = Git(self._project.root)
+        self._version = self._git.parse_version(version)
         # git stash create comes up empty when no changes were made since the
         # last commit. Don't use 'dev' as version in these cases.
-        git_status = call_shell("git status --porcelain")
-        if self._version == "dev" and git_status == "":
-            self._version = Git().parse_version("current")
+        if self._version == "dev" and self._git.status() == "":
+            self._version = self._git.parse_version("current")
         if not self._version:
             logging.error("Error: Version could not be determined through Git")
             sys.exit(1)
         self._callback_archive = callback_archive
-        self._config = Config()
-        self._path_dist_module = PATH_DIST / "src" / self._config["module_name"]
+        self._config = self._project.config
+        self._dist = self._project.dist_dir
+        self._path_dist_module = self._project.dist_src
+        self._paths_licenses = [self._dist, self._dist / "resources"]
+        self._path_optional_icons = (
+            self._project.package_dir / "resources" / "icons" / "optional"
+        )
+        self._path_changelog = self._dist / "CHANGELOG.md"
 
     def build(self, qt_versions: List[QtVersion], disttype="local", pyenv=None):
         logging.info(
@@ -97,10 +115,11 @@ class AddonBuilder:
             self._version,
         )
 
-        clean_repo()
+        clean_project(self._project)
 
-        PATH_DIST.mkdir(parents=True)
-        Git().archive(self._version, PATH_DIST)
+        self._dist.mkdir(parents=True)
+        # Archiving from the package directory exports only that subtree
+        Git(self._project.package_dir).archive(self._version, self._dist)
 
     def build_dist(self, qt_versions: List[QtVersion], disttype="local", pyenv=None):
         self._copy_licenses()
@@ -113,7 +132,7 @@ class AddonBuilder:
 
         self._write_manifest(disttype)
 
-        ui_builder = UIBuilder(dist=PATH_DIST, config=self._config)
+        ui_builder = UIBuilder(dist=self._dist, config=self._config)
 
         should_create_qt_shim: bool = False
         for qt_version in qt_versions:
@@ -145,7 +164,9 @@ class AddonBuilder:
             ext=ext,
         )
 
-        out_path = PATH_PROJECT_ROOT / "build" / out_name
+        out_dir = self._project.out_dir
+        out_dir.mkdir(parents=True, exist_ok=True)
+        out_path = out_dir / out_name
 
         if out_path.exists():
             out_path.unlink()
@@ -168,6 +189,7 @@ class AddonBuilder:
             version=self._version,
             dist_type=disttype,
             target_dir=self._path_dist_module,
+            git=self._git,
         )
 
     def _copy_licenses(self):
@@ -187,5 +209,5 @@ class AddonBuilder:
     def _copy_optional_icons(self):
         logging.info("Copying additional icons...")
         copy_recursively(
-            self._path_optional_icons, PATH_DIST / "resources" / "icons" / ""
+            self._path_optional_icons, self._dist / "resources" / "icons" / ""
         )

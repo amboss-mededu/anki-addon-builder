@@ -35,28 +35,49 @@ Project config parser
 
 import json
 import logging
+import warnings
+from collections import UserDict
+from pathlib import Path
+from typing import Any, Optional
 
 import jsonschema
 from jsonschema.exceptions import ValidationError
 
-from collections import UserDict
+from . import PATH_PACKAGE
 
-from . import PATH_PACKAGE, PATH_PROJECT_ROOT
+MANIFEST_NAME = "addon.json"
 
-PATH_CONFIG = PATH_PROJECT_ROOT / "addon.json"
+
+def __getattr__(name: str) -> Any:
+    if name == "PATH_CONFIG":
+        warnings.warn(
+            "aab.config.PATH_CONFIG is deprecated. Use "
+            "aab.project.Project.discover().manifest_path instead.",
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return Path.cwd() / MANIFEST_NAME
+    raise AttributeError("module {!r} has no attribute {!r}".format(__name__, name))
 
 
 class Config(UserDict):
 
     """
-    Simple dictionary-like interface to the repository config file
+    Simple dictionary-like interface to the add-on manifest (addon.json)
     """
 
     with (PATH_PACKAGE / "schema.json").open("r", encoding="utf-8") as f:
         _schema = json.loads(f.read())
 
-    def __init__(self, path=None):
-        self._path = path or PATH_CONFIG
+    def __init__(self, path: Optional[Path] = None):
+        if path is None:
+            # Legacy constructor: locate the manifest from the working directory
+            from .project import ProjectNotFoundError, find_manifest
+
+            path = find_manifest(Path.cwd())
+            if path is None:
+                raise ProjectNotFoundError(Path.cwd())
+        self._path = Path(path)
         try:
             with self._path.open(encoding="utf-8") as f:
                 data = json.loads(f.read())
@@ -64,10 +85,15 @@ class Config(UserDict):
             self.data = data
         except (IOError, OSError, ValueError, ValidationError):
             logging.error(
-                "Error: Could not read '{}'. Traceback follows "
-                "below:\n".format(self._path.name)
+                "Error: Could not read '{}'. Traceback follows below:\n".format(
+                    self._path
+                )
             )
             raise
+
+    @property
+    def path(self) -> Path:
+        return self._path
 
     def __setitem__(self, name, value):
         self.data[name] = value
@@ -79,7 +105,8 @@ class Config(UserDict):
                 json.dump(data, f, ensure_ascii=False, indent=4, sort_keys=False)
         except (IOError, OSError):
             logging.error(
-                "Error: Could not write to '{}'. Traceback follows "
-                "below:\n".format(self._path.name)
+                "Error: Could not write to '{}'. Traceback follows below:\n".format(
+                    self._path
+                )
             )
             raise

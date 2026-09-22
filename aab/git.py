@@ -34,11 +34,30 @@ Basic Git interface
 """
 
 import logging
+import os
+from typing import Optional, Union
 
 from .utils import call_shell
 
+PathLike = Union[str, "os.PathLike[str]"]
+
 
 class Git(object):
+
+    """
+    Thin wrapper around the git CLI, bound to a working directory (normally the
+    project root) so that results do not depend on where aab was invoked from.
+    """
+
+    def __init__(self, cwd: Optional[PathLike] = None):
+        self._cwd = str(cwd) if cwd is not None else None
+
+    def _call(self, command, **kwargs):
+        return call_shell(command, cwd=self._cwd, **kwargs)
+
+    def status(self) -> str:
+        return self._call("git status --porcelain")
+
     def parse_version(self, vstring=None):
         if vstring and vstring not in ("release", "current"):
             return vstring
@@ -49,16 +68,21 @@ class Git(object):
         if vstring is None or vstring == "release":
             cmd += " --abbrev=0"
 
-        version = call_shell(cmd, error_exit=False)
+        version = self._call(cmd, error_exit=False)
 
         if version is False:
             # Perhaps no tag has been set yet. Try to grab commit ID before
             # giving up and exiting
-            version = call_shell("git rev-parse --short HEAD")
+            version = self._call("git rev-parse --short HEAD")
 
         return version
 
     def archive(self, version, outdir):
+        """
+        Export `version` into `outdir`. git roots the archive at the bound
+        working directory, so a Git instance bound to a subdirectory of the
+        repository exports only that subtree.
+        """
         logging.info("Exporting Git archive...")
         if not outdir or not version:
             return False
@@ -72,7 +96,7 @@ class Git(object):
             cmd = "git archive --format tar {vers} | tar -x -C {outdir}/".format(
                 vers=version, outdir=outdir
             )
-        return call_shell(cmd)
+        return self._call(cmd)
 
     def modtime(self, version):
         if version == "dev":
@@ -82,9 +106,9 @@ class Git(object):
                 "git status -s | while read mode file;"
                 " do echo $(stat -c %Y $file); done"
             )
-            modtimes = call_shell(cmd).splitlines()
+            modtimes = self._call(cmd).splitlines()
             # https://stackoverflow.com/a/12010656
             modtimes = [int(modtime) for modtime in modtimes]
             return max(modtimes)
         else:
-            return int(call_shell("git log -1 -s --format=%ct {}".format(version)))
+            return int(self._call("git log -1 -s --format=%ct {}".format(version)))

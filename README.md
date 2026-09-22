@@ -50,7 +50,7 @@ You can get an overview of all supported actions by accessing the built-in help 
 
 ```
 $ aab -h
-usage: aab [-h] [-v] {build,ui,manifest,clean,create_dist,build_dist,package_dist} ...
+usage: aab [-h] [-v] [--project DIR] {build,ui,manifest,clean,create_dist,build_dist,package_dist} ...
 
 positional arguments:
   {build,ui,manifest,clean,create_dist,build_dist,package_dist}
@@ -75,13 +75,16 @@ positional arguments:
 optional arguments:
   -h, --help            show this help message and exit
   -v, --verbose         Enable verbose output
+  --project DIR         Directory to start looking for the add-on project in. aab walks up from
+                        there until it finds an addon.json. Defaults to the current working
+                        directory. [env: AAB_PROJECT]
 ```
 
 Each subcommand also comes with its own help screen, e.g.:
 
 ```
-$ aab build -h
-usage: aab build [-h] [-t {qt6,qt5,all,anki21}] [-d {local,ankiweb,all}] [version]
+$ aab build_dist -h
+usage: aab build_dist [-h] [-t {qt6,qt5,all,anki21}] [-d {local,ankiweb,all}] [version]
 
 positional arguments:
   version               Version to (pre-)build as a git reference (e.g. 'v1.2.0' or 'd338f6405').
@@ -95,7 +98,6 @@ optional arguments:
                         target both Qt5 and Qt6.
   -d {local,ankiweb,all}, --dist {local,ankiweb,all}
                         Distribution channel to build for
-
 ```
 
 #### Examples
@@ -112,13 +114,19 @@ or simply
 aab build
 ```
 
-The output artifacts will be, by default, written into `./build/`.
+The output artifacts will be written into `build/` under the project root.
 
 _Compile Qt UI forms and resources for Qt6 builds of Anki_
 
 ```bash
 aab ui -t qt6
 ```
+
+#### How aab finds your project
+
+`aab` looks for an `addon.json` in the current working directory and, failing that, in each parent directory in turn. The directory holding the nearest `addon.json` is the project root. All commands behave the same no matter which directory inside the project you run them from, so `aab ui` works just as well from `designer/` as from the root. The one exception is a source tree exported under `build/dist`, which carries its own `addon.json` in the classic layout and is therefore treated as a project of its own when you run `aab` inside it, as before. Use `--project DIR` (or the `AAB_PROJECT` environment variable) to start the search somewhere other than the current working directory, e.g. from a build script that runs elsewhere.
+
+Build output always lives under the project root: the prepared source tree under `build/dist` and the packaged add-on under `build/`.
 
 ### Specifications
 
@@ -136,6 +144,24 @@ project root
 ```
 
 For a more detailed look at the entire directory tree please feel free to take a look at some of the [add-ons I've published recently](https://github.com/topics/anki-addon?o=desc&q=user%3Aglutanimate&s=updated).
+
+#### Package layout
+
+Repositories that keep more than the Python add-on (e.g. a web bundle with its own toolchain) can move the add-on sources into a package directory and point `addon.json` at it with `package_dir`:
+
+```
+project root
+├── packages
+│   ├── python
+│   │   ├── src/{module_name}
+│   │   ├── designer
+│   │   └── resources
+│   └── web
+├── build (aab output, as before)
+└── addon.json  ("package_dir": "packages/python")
+```
+
+`addon.json` stays at the project root and keeps describing the add-on as a whole, while `src/`, `designer/` and `resources/` are resolved inside the package directory. `aab ui` compiles into the package, and `aab create_dist` exports only the package subtree, so `build/dist` is always package-shaped regardless of the layout. `package_dir` must be a relative path inside the project root and defaults to `.`, the classic flat layout above. Note that `LICENSE*` and `CHANGELOG.md` are picked up from the exported tree, so in a package layout they have to live inside the package directory to end up in the add-on.
 
 #### addon.json
 

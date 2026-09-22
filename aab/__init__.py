@@ -42,7 +42,9 @@ For instructions on how to set up a development environment for Anki
 please refer to Anki's documentation.
 """
 
+import warnings
 from pathlib import Path
+from typing import Any
 
 # Meta
 
@@ -65,9 +67,30 @@ under certain conditions; For details please see the LICENSE file.
 
 # Global variables
 
-# assuming that the cwd is the project root, which might not aloways be the case
-# TODO: optionally read project root from env
-PATH_PROJECT_ROOT = Path.cwd()
-PATH_DIST = PATH_PROJECT_ROOT / "build" / "dist"
 PATH_PACKAGE = Path(__file__).resolve().parent
 DIST_TYPES = ["local", "ankiweb"]
+
+
+# Deprecated module-level project paths
+#
+# The project root used to be computed from the current working directory at
+# import time. Projects are now resolved explicitly, see aab.project.Project.
+# The old names are kept with their cwd-based semantics and a deprecation warning.
+
+_DEPRECATED_PATHS = {
+    "PATH_PROJECT_ROOT": lambda: Path.cwd(),
+    "PATH_DIST": lambda: Path.cwd() / "build" / "dist",
+}
+
+
+def __getattr__(name: str) -> Any:
+    if name in _DEPRECATED_PATHS:
+        warnings.warn(
+            "aab.{} is deprecated. Use aab.project.Project.discover() instead.".format(
+                name
+            ),
+            DeprecationWarning,
+            stacklevel=2,
+        )
+        return _DEPRECATED_PATHS[name]()
+    raise AttributeError("module {!r} has no attribute {!r}".format(__name__, name))

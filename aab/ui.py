@@ -34,7 +34,9 @@ UI Compilation
 """
 
 import logging
+import os
 import re
+import shlex
 import shutil
 from datetime import datetime
 from pathlib import Path
@@ -229,8 +231,8 @@ class UIBuilder:
             cmd = "{env} {tool} {in_file} -o {out_file}".format(
                 env=env,
                 tool=tool,
-                in_file=self._relative_to_cwd(in_file),
-                out_file=self._relative_to_cwd(out_file),
+                in_file=shlex.quote(str(self._relative_to_cwd(in_file))),
+                out_file=shlex.quote(str(self._relative_to_cwd(out_file))),
             )
             call_shell(cmd)
 
@@ -339,5 +341,11 @@ class UIBuilder:
 
         return format_dict
 
-    def _relative_to_cwd(self, path: Path):
-        return path.relative_to(Path.cwd())
+    def _relative_to_cwd(self, path: Path) -> Path:
+        # Paths are relativized to keep the generated form headers readable. The
+        # project may lie outside of cwd, so fall back to the path as-is where no
+        # relative form exists (e.g. another Windows drive).
+        try:
+            return Path(os.path.relpath(path, Path.cwd()))
+        except ValueError:
+            return path
