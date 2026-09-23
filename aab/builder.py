@@ -89,7 +89,12 @@ class AddonBuilder:
         self._config = self._project.config
         self._dist = self._project.dist_dir
         self._path_dist_module = self._project.dist_src
+        # License files are picked up from the exported tree. In a package
+        # layout the project's license usually lives at the project root, which
+        # the package export does not contain, so look there as well.
         self._paths_licenses = [self._dist, self._dist / "resources"]
+        if self._project.package_dir != self._project.root:
+            self._paths_licenses.append(self._project.root)
         self._path_optional_icons = (
             self._project.package_dir / "resources" / "icons" / "optional"
         )

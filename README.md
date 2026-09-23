@@ -161,7 +161,7 @@ project root
 └── addon.json  ("package_dir": "packages/python")
 ```
 
-`addon.json` stays at the project root and keeps describing the add-on as a whole, while `src/`, `designer/` and `resources/` are resolved inside the package directory. `aab ui` compiles into the package, and `aab create_dist` exports only the package subtree, so `build/dist` is always package-shaped regardless of the layout. `package_dir` must be a relative path inside the project root and defaults to `.`, the classic flat layout above. Note that `LICENSE*` and `CHANGELOG.md` are picked up from the exported tree, so in a package layout they have to live inside the package directory to end up in the add-on.
+`addon.json` stays at the project root and keeps describing the add-on as a whole, while `src/`, `designer/` and `resources/` are resolved inside the package directory. `aab ui` compiles into the package, and `aab create_dist` exports only the package subtree, so `build/dist` is always package-shaped regardless of the layout. `package_dir` must be a relative path inside the project root and defaults to `.`, the classic flat layout above. `LICENSE*` files are copied into the add-on from the project root as well as from the package, while `CHANGELOG.md` is picked up from the package only.
 
 #### addon.json
 

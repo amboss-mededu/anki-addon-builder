@@ -191,6 +191,8 @@ def test_package_layout_dist_pipeline(package_project: Path, run_cli):
     package_dir = package_project / PACKAGE_SUBDIR
     dist = package_project / "build" / "dist"
 
+    (package_project / "LICENSE").write_text("root license", encoding="utf-8")
+
     result = run_cli(["create_dist", "current"], cwd=package_project)
     assert result.code == 0, result.out
     # Package-shaped: sources at the dist root, no package_dir nesting, no manifest
@@ -206,6 +208,9 @@ def test_package_layout_dist_pipeline(package_project: Path, run_cli):
     dist_module = dist / "src" / MODULE_NAME
     assert read_manifest(dist_module)["version"] == "v0.1.0"
     assert (dist_module / "gui" / "forms" / "qt6" / "dialog.py").is_file()
+    # The project-level license reaches the module although the package
+    # export does not contain it
+    assert (dist_module / "LICENSE.txt").read_text(encoding="utf-8") == "root license"
     # The working tree was left alone
     assert not (package_dir / "src" / MODULE_NAME / "gui").exists()
 
